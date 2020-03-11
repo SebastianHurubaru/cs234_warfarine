@@ -53,10 +53,10 @@ class FixedDoseModel(DefaultDoseModel):
      Fixed-dose: This approach will assign 35mg/day (medium) dose to all patients.
     """
 
-    def __init__(self):
+    def __init__(self, args):
         super(FixedDoseModel, self).__init__()
 
-        self.dosis = 35.0
+        self.dosis = args.fixed_dose
 
 
     def get_dose(self, input):
@@ -75,7 +75,7 @@ class WarfarinClinicalDosingModel(DefaultDoseModel):
      Warfarin clinical dosing algorithm .
     """
 
-    def __init__(self):
+    def __init__(self, args):
         super(WarfarinClinicalDosingModel, self).__init__()
 
         self.dose_params = [
@@ -98,16 +98,6 @@ class WarfarinClinicalDosingModel(DefaultDoseModel):
             1.2799,  # enzyme inducer status
             -0.5695  # amiodarone status
         ]
-
-    def evaluate(self, eval_data):
-
-        dose_inputs = np.insert(eval_data, 0, 1, axis=1)
-
-        results = np.dot(dose_inputs, np.asarray(self.dose_params).reshape(-1, 1)).reshape(-1)
-
-        results = results ** 2
-
-        return results
 
     def compute_arm_index(self, data):
 
@@ -133,7 +123,7 @@ class WarfarinPharmacogeneticDosingModel(DefaultDoseModel):
      the Warfarin pharmacogenetic dosing algorithm.
     """
 
-    def __init__(self):
+    def __init__(self, args):
         super(WarfarinPharmacogeneticDosingModel, self).__init__()
 
         self.dose_params = [
@@ -157,16 +147,6 @@ class WarfarinPharmacogeneticDosingModel(DefaultDoseModel):
             -0.5503  # amiodarone status
         ]
 
-    def evaluate(self, eval_data):
-
-        dose_inputs = np.insert(eval_data, 0, 1, axis=1)
-
-        results = np.dot(dose_inputs, np.asarray(self.dose_params).reshape(-1, 1)).reshape(-1)
-
-        results = results ** 2
-
-        return results
-
     def compute_arm_index(self, data):
 
 
@@ -184,3 +164,75 @@ class WarfarinPharmacogeneticDosingModel(DefaultDoseModel):
         arm_indexes = torch.LongTensor(util.discretize(dose), device=data.device).unsqueeze(-1)
 
         return arm_indexes
+
+
+class LinUCBModel(DefaultDoseModel):
+    """
+     LinUCB: This approach will assign a dose based on the Linear UCB RL algorithm.
+    """
+
+    def __init__(self, args):
+        super(LinUCBModel, self).__init__()
+
+        self.hidden_size = args.hidden_size
+
+        self.A = []
+        self.b = []
+        self.AI = []
+        self.theta = []
+
+        self.alpha = args.ucb_alpha
+
+        for _ in range(3):
+            self.A.append(torch.eye(self.hidden_size).unsqueeze(0))
+            self.b.append(torch.zeros((self.hidden_size, 1)).unsqueeze(0))
+            self.AI.append(torch.eye(self.hidden_size).unsqueeze(0))
+            self.theta.append(torch.zeros((self.hidden_size, 1)).unsqueeze(0))
+
+        self.A = torch.cat(self.A, 0)
+        self.b = torch.cat(self.b, 0)
+        self.AI = torch.cat(self.AI, 0)
+        self.theta = torch.cat(self.theta, 0)
+
+    def train(self, data):
+
+        # need to loop through the batch and make it iterative
+        for t in range(data.size(0)):
+
+            a_max = self.compute_arm_index(data[t].unsqueeze(0))
+
+            # get the oracle rewards
+            r1, r2, r3 = self.oracle_model(data[t].unsqueeze(0))
+
+            # get the oracle reward for the calculated arm
+            r_oracle = torch.cat([r1, r2, r3], 1)
+            r = r_oracle.gather(1, a_max).squeeze(-1)
+
+            # update parameters
+            x = data[t].unsqueeze(-1)
+            x_t = torch.transpose(x, 0, 1)
+
+            self.A[a_max] += torch.matmul(x, x_t)
+            self.b[a_max] += r * x
+            self.AI[a_max] = torch.inverse(self.A[a_max])
+            self.theta[a_max] = torch.matmul(self.AI[a_max], self.b[a_max])
+
+    def compute_arm_index(self, data):
+
+        x = data.unsqueeze(1).unsqueeze(-1)
+
+        x_t = torch.transpose(x, 2, 3)
+
+        p = torch.matmul(torch.transpose(self.theta, 1, 2), x).squeeze(-1).squeeze(-1) + \
+            self.alpha * torch.sqrt(
+                torch.matmul(
+                    torch.matmul(x_t, self.AI),
+                    x
+                    ).squeeze(-1).squeeze(-1)
+                )
+
+
+        # select the action with highest bound
+        a_max = torch.argmax(p, 1, keepdim=True)
+
+        return a_max

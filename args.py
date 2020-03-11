@@ -96,7 +96,7 @@ def get_train_args():
                         help='Maximum gradient norm for gradient clipping.')
 
     args = parser.parse_args()
-    if args.model in ['fixed', 'clinical', 'pharmacogenetic'] and not args.oracle_load_path:
+    if args.model in ['fixed', 'clinical', 'pharmacogenetic', 'lin_ucb'] and not args.oracle_load_path:
         raise argparse.ArgumentError('Missing required argument --oracle_load_path')
 
     return args
@@ -131,7 +131,7 @@ def add_common_args(parser):
                         default='./data/warfarin_feat.csv')
     parser.add_argument('--model',
                         type=str,
-                        choices=['oracle', 'fixed', 'clinical', 'pharmacogenetic'],
+                        choices=['oracle', 'fixed', 'clinical', 'pharmacogenetic', 'lin_ucb'],
                         default='fixed')
     parser.add_argument('--save_dir',
                         type=str,
@@ -188,3 +188,14 @@ def add_train_test_args(parser):
                         type=bool,
                         default=False,
                         help='Shuffle the data.')
+
+    parser.add_argument('--ucb_alpha',
+                        type=float,
+                        default=0.25,
+                        help='UCB linear alpha parameter.')
+
+    parser.add_argument('--fixed_dose',
+                        type=float,
+                        default=35.0,
+                        help='UCB linear alpha parameter.')
+

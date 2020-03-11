@@ -14,7 +14,8 @@ from models import *
 model_map = {
     'fixed': 'FixedDoseModel',
     'clinical': 'WarfarinClinicalDosingModel',
-    'pharmacogenetic': 'WarfarinPharmacogeneticDosingModel'
+    'pharmacogenetic': 'WarfarinPharmacogeneticDosingModel',
+    'lin_ucb': 'LinUCBModel'
 }
 
 ckpt_paths = queue.Queue()

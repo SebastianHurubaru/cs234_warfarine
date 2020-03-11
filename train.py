@@ -120,7 +120,7 @@ def train_default(args, train_loader, tbx):
     else:
         # Get model
         log.info('Building model...')
-        model = util.get_model_class(args.model)()
+        model = util.get_model_class(args.model)(args)
 
     # Load the oracle model
     oracle_model = util.LinearOracle(hidden_size=args.hidden_size,
@@ -129,6 +129,8 @@ def train_default(args, train_loader, tbx):
 
     oracle_model = util.load_oracle_model(oracle_model, args.oracle_load_path, args.gpu_ids, return_step=False)
     oracle_model.eval()
+
+    model.oracle_model = oracle_model
 
     # Train
     log.info('Training...')
