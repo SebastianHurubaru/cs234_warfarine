@@ -16,18 +16,24 @@ class LinearOracle(nn.Module):
     def __init__(self, hidden_size, drop_prob=0.):
         super(LinearOracle, self).__init__()
 
-        self.beta_1 = nn.Linear(hidden_size, bias=True)
-        self.beta_2 = nn.Linear(hidden_size, bias=True)
-        self.beta_3 = nn.Linear(hidden_size, bias=True)
+        self.out_size = 1
+        self.drop_prob = drop_prob
+
+        self.beta_1 = nn.Linear(hidden_size, self.out_size, bias=True)
+        self.beta_2 = nn.Linear(hidden_size, self.out_size, bias=True)
+        self.beta_3 = nn.Linear(hidden_size, self.out_size, bias=True)
 
 
     def forward(self, input):
 
-        dose_inputs = util.extract_features(input)
+        r1 = self.beta_1(input)
+        r2 = self.beta_2(input)
+        r3 = self.beta_3(input)
 
-        r1 = self.beta_1(dose_inputs)
-        r2 = self.beta_2(dose_inputs)
-        r3 = self.beta_3(dose_inputs)
+        # Apply dropout
+        r1 = F.dropout(r1, self.drop_prob, self.training)
+        r2 = F.dropout(r2, self.drop_prob, self.training)
+        r3 = F.dropout(r3, self.drop_prob, self.training)
 
         return r1, r2, r3
 
@@ -39,9 +45,8 @@ class DefaultDoseModel:
     def train(self, data):
         pass
 
-    def evaluate(self, eval_data):
+    def compute_arm_index(self, data):
         pass
-
 
 class FixedDoseModel(DefaultDoseModel):
     """
@@ -54,11 +59,14 @@ class FixedDoseModel(DefaultDoseModel):
         self.dosis = 35.0
 
 
-    def evaluate(self, eval_data):
-        return eval_data.apply(lambda row: self.get_dose(row.to_numpy(dtype=float)[:-1]), axis=1)
-
     def get_dose(self, input):
         return self.dosis
+
+    def compute_arm_index(self, data):
+
+        arm_indexes = torch.ones((data.size(0), 1), dtype=torch.long, device=data.device)
+
+        return arm_indexes
 
 
 class WarfarinClinicalDosingModel(DefaultDoseModel):
@@ -101,6 +109,23 @@ class WarfarinClinicalDosingModel(DefaultDoseModel):
 
         return results
 
+    def compute_arm_index(self, data):
+
+
+        dose_inputs = torch.cat([
+            torch.ones((data.size(0), 1), dtype=torch.float, device=data.device),
+            data], 1)
+
+        dose_params_tensor = torch.FloatTensor(self.dose_params).unsqueeze(-1)
+        dose_params_tensor.to(data.device)
+
+        dose = torch.matmul(dose_inputs, torch.FloatTensor(self.dose_params))
+
+        dose = dose ** 2
+
+        arm_indexes = torch.LongTensor(util.discretize(dose), device=data.device).unsqueeze(-1)
+
+        return arm_indexes
 
 class WarfarinPharmacogeneticDosingModel(DefaultDoseModel):
     """
@@ -141,3 +166,21 @@ class WarfarinPharmacogeneticDosingModel(DefaultDoseModel):
         results = results ** 2
 
         return results
+
+    def compute_arm_index(self, data):
+
+
+        dose_inputs = torch.cat([
+            torch.ones((data.size(0), 1), dtype=torch.float, device=data.device),
+            data], 1)
+
+        dose_params_tensor = torch.FloatTensor(self.dose_params).unsqueeze(-1)
+        dose_params_tensor.to(data.device)
+
+        dose = torch.matmul(dose_inputs, torch.FloatTensor(self.dose_params))
+
+        dose = dose ** 2
+
+        arm_indexes = torch.LongTensor(util.discretize(dose), device=data.device).unsqueeze(-1)
+
+        return arm_indexes

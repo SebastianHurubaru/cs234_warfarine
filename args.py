@@ -45,8 +45,40 @@ def get_train_args():
 
     parser.add_argument('--num_epochs',
                         type=int,
-                        default=1,
+                        default=30,
                         help='Number of epochs for which to train.')
+
+    parser.add_argument('--lr',
+                        type=float,
+                        default=0.5,
+                        help='Learning rate.')
+
+    parser.add_argument('--lr_step_size',
+                        type=float,
+                        default=10**4,
+                        help='Learning rate scheduler step size.')
+
+    parser.add_argument('--lr_step_gamma',
+                        type=float,
+                        default=0.5,
+                        help='Learning rate scheduler gamma.')
+
+    parser.add_argument('--l2_wd',
+                        type=float,
+                        default=0,
+                        help='L2 weight decay.')
+
+
+    parser.add_argument('--ema_decay',
+                        type=float,
+                        default=0.999,
+                        help='Decay rate for exponential moving average of parameters.')
+
+    parser.add_argument('--metric_name',
+                        type=str,
+                        default='mse_loss',
+                        choices=('mse_loss'),
+                        help='Name of dev metric to determine best checkpoint.')
 
     parser.add_argument('--eval_steps',
                         type=int,
@@ -58,7 +90,14 @@ def get_train_args():
                         default=5,
                         help='Maximum number of checkpoints to keep on disk.')
 
+    parser.add_argument('--max_grad_norm',
+                        type=float,
+                        default=5.0,
+                        help='Maximum gradient norm for gradient clipping.')
+
     args = parser.parse_args()
+    if args.model in ['fixed', 'clinical', 'pharmacogenetic'] and not args.oracle_load_path:
+        raise argparse.ArgumentError('Missing required argument --oracle_load_path')
 
     return args
 
@@ -72,10 +111,6 @@ def get_test_args():
     add_common_args(parser)
     add_train_test_args(parser)
 
-    parser.add_argument('--sub_file',
-                        type=str,
-                        default='submission.csv',
-                        help='Name for submission file.')
 
     # Require load_path for test.py
     args = parser.parse_args()
@@ -112,7 +147,44 @@ def add_train_test_args(parser):
                         type=str,
                         required=True,
                         help='Name to identify subdir or test run.')
+
     parser.add_argument('--load_path',
                         type=str,
                         default=None,
                         help='Path to load as a model checkpoint.')
+
+    parser.add_argument('--oracle_load_path',
+                        type=str,
+                        default=None,
+                        help='Path to load as a model checkpoint.')
+
+    parser.add_argument('--seed',
+                        type=int,
+                        default=234,
+                        help='Random seed for reproducibility.')
+
+    parser.add_argument('--num_workers',
+                        type=int,
+                        default=0,
+                        help='Number of sub-processes to use per data loader.')
+
+    parser.add_argument('--batch_size',
+                        type=int,
+                        default=32,
+                        help='Batch size per GPU. Scales automatically when \
+                                  multiple GPUs are available.')
+
+    parser.add_argument('--hidden_size',
+                        type=int,
+                        default=17,
+                        help='Number of features in the hidden layers.')
+
+    parser.add_argument('--drop_prob',
+                        type=float,
+                        default=0.3,
+                        help='Probability of zeroing an activation in dropout layers.')
+
+    parser.add_argument('--data_shuffle',
+                        type=bool,
+                        default=False,
+                        help='Shuffle the data.')

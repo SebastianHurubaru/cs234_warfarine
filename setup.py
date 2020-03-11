@@ -208,6 +208,24 @@ def extract_admiodarone_status(row):
     return admiodarone_status
 
 
+def get_reward_for_arm(row, arm):
+
+    true_arm = util.discretize(float(row['Therapeutic Dose of Warfarin']))
+
+    reward = 0 if arm - 1 == true_arm else -1
+
+    log.debug(
+        'ID {} - Arm_{} Therapeutic Dose of Warfarin = {}|{}  => {}'
+            .format(
+            row['PharmGKB Subject ID'], arm,
+            row['Therapeutic Dose of Warfarin'], true_arm,
+            reward
+        )
+    )
+
+    return reward
+
+
 def extract_features(df):
     features_df = df.copy(deep=True)
 
@@ -265,8 +283,14 @@ def extract_features(df):
     # admiodarone status, i.e. patient taking amiodarone
     features_df['admiodarone_status'] = df.apply(lambda row: extract_admiodarone_status(row), axis=1)
 
-    # get the actual dose to be used as label
-    features_df['true_dose'] = df.apply(lambda row: row['Therapeutic Dose of Warfarin'], axis=1)
+    # get the rewards to be used as labels
+    features_df['reward_arm_1'] = df.apply(lambda row: get_reward_for_arm(row, 1), axis=1)
+
+    # get the rewards to be used as labels
+    features_df['reward_arm_2'] = df.apply(lambda row: get_reward_for_arm(row, 2), axis=1)
+
+    # get the rewards to be used as labels
+    features_df['reward_arm_3'] = df.apply(lambda row: get_reward_for_arm(row, 3), axis=1)
 
     return features_df
 
