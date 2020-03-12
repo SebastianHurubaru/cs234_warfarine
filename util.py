@@ -225,7 +225,7 @@ class EMA:
                 param.data = self.original[name]
 
 
-def load_oracle_model(model, checkpoint_path, gpu_ids, return_step=True):
+def load_reward_model(model, checkpoint_path, gpu_ids, return_step=True):
     """Load model parameters from disk.
 
     Args:

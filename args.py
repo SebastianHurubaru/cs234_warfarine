@@ -82,7 +82,7 @@ def get_train_args():
 
     parser.add_argument('--eval_steps',
                         type=int,
-                        default=100,
+                        default=128,
                         help='Number of steps between successive evaluations.')
 
     parser.add_argument('--max_checkpoints',
@@ -96,8 +96,8 @@ def get_train_args():
                         help='Maximum gradient norm for gradient clipping.')
 
     args = parser.parse_args()
-    if args.model in ['fixed', 'clinical', 'pharmacogenetic', 'lin_ucb'] and not args.oracle_load_path:
-        raise argparse.ArgumentError('Missing required argument --oracle_load_path')
+    if args.model in ['fixed', 'clinical', 'pharmacogenetic', 'lin_ucb'] and not args.reward_load_path:
+        raise argparse.ArgumentError('Missing required argument --reward_load_path')
 
     return args
 
@@ -131,7 +131,7 @@ def add_common_args(parser):
                         default='./data/warfarin_feat.csv')
     parser.add_argument('--model',
                         type=str,
-                        choices=['oracle', 'fixed', 'clinical', 'pharmacogenetic', 'lin_ucb'],
+                        choices=['reward', 'fixed', 'clinical', 'pharmacogenetic', 'lin_ucb'],
                         default='fixed')
     parser.add_argument('--save_dir',
                         type=str,
@@ -153,7 +153,7 @@ def add_train_test_args(parser):
                         default=None,
                         help='Path to load as a model checkpoint.')
 
-    parser.add_argument('--oracle_load_path',
+    parser.add_argument('--reward_load_path',
                         type=str,
                         default=None,
                         help='Path to load as a model checkpoint.')
@@ -170,7 +170,7 @@ def add_train_test_args(parser):
 
     parser.add_argument('--batch_size',
                         type=int,
-                        default=32,
+                        default=128,
                         help='Batch size per GPU. Scales automatically when \
                                   multiple GPUs are available.')
 

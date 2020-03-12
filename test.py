@@ -36,15 +36,17 @@ if __name__ == '__main__':
     else:
         # Get model
         log.info('Building model...')
-        model = util.get_model_class(args.model)()
+        model = util.get_model_class(args.model)(args)
 
-    # Load the oracle model
-    oracle_model = util.LinearOracle(hidden_size=args.hidden_size,
-                                     drop_prob=args.drop_prob)
-    oracle_model = torch.nn.DataParallel(oracle_model, gpu_ids)
+    # Load the reward model
+    reward_model = util.LinearRewardModel(hidden_size=args.hidden_size,
+                                          drop_prob=args.drop_prob)
+    reward_model = torch.nn.DataParallel(reward_model, gpu_ids)
 
-    oracle_model = util.load_oracle_model(oracle_model, args.oracle_load_path, gpu_ids, return_step=False)
-    oracle_model.eval()
+    reward_model = util.load_reward_model(reward_model, args.reward_load_path, gpu_ids, return_step=False)
+    reward_model.eval()
+
+    model.reward_model = reward_model
 
     # Load the data
     log.info('Loading data...')
@@ -74,7 +76,7 @@ if __name__ == '__main__':
             batch_size = features.size(0)
 
             # Forward
-            r1, r2, r3 = oracle_model(features)
+            r1, r2, r3 = reward_model(features)
 
             # Compute regret
             r = torch.cat([r1, r2, r3], 1)
@@ -95,10 +97,10 @@ if __name__ == '__main__':
             progress_bar.update(batch_size)
 
             progress_bar.set_postfix(total_regret=total_regret.item(),
-                                     performance=n_right_decisions.item()/n_samples * 100)
+                                     frac_incorrect_decisions=(n_samples - n_right_decisions.item())/n_samples * 100)
 
     log.info(f'Model - {args.model} total_regret = {total_regret.item()}')
-    log.info(f'Model - {args.model} performance = {n_right_decisions.item()/n_samples*100}')
+    log.info(f'Model - {args.model} frac_incorrect_decisions = {(n_samples - n_right_decisions.item())/n_samples*100}')
 
 
 

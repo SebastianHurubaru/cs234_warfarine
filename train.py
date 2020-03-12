@@ -19,7 +19,7 @@ from tqdm import tqdm
 import numpy as np
 
 
-def evaluate(model, oracle_model):
+def evaluate(model, reward_model):
     # Load the evaluation data
     data = util.read_data_file(args.input_file, index_col=0)
     eval_dataset = data.to_numpy(dtype=float)
@@ -41,7 +41,7 @@ def evaluate(model, oracle_model):
             batch_size = features.size(0)
 
             # Forward
-            r1, r2, r3 = oracle_model(features)
+            r1, r2, r3 = reward_model(features)
 
             # Compute regret
             r = torch.cat([r1, r2, r3], 1)
@@ -61,12 +61,12 @@ def evaluate(model, oracle_model):
             progress_bar.update(batch_size)
 
             progress_bar.set_postfix(total_regret=total_regret.item(),
-                                     performance=n_right_decisions.item() / n_samples * 100)
+                                     frac_incorrect_decisions=(n_samples - n_right_decisions.item()) / n_samples * 100)
 
-    return {'total_regret': total_regret, 'performance': n_right_decisions.item() / n_samples * 100}
+    return {'total_regret': total_regret, 'frac_incorrect_decisions': (n_samples - n_right_decisions.item()) / n_samples * 100}
 
 
-def evaluate_oracle(oracle_model):
+def evaluate_reward(reward_model):
     # Load the evaluation data
     data = util.read_data_file(args.input_file, index_col=0)
     eval_dataset = data.to_numpy(dtype=float)
@@ -77,7 +77,7 @@ def evaluate_oracle(oracle_model):
                              batch_size=args.batch_size,
                              shuffle=args.data_shuffle,
                              num_workers=args.num_workers)
-    oracle_model.eval()
+    reward_model.eval()
 
     n_right_decisions = 0.
     n_samples = 0.
@@ -88,11 +88,11 @@ def evaluate_oracle(oracle_model):
             batch_size = features.size(0)
 
             # Forward
-            r1, r2, r3 = oracle_model(features)
+            r1, r2, r3 = reward_model(features)
 
             n_samples += batch_size
 
-            # Compute performance
+            # Compute fraction of incorrect decisions
             r_pred = torch.cat([r1, r2, r3], 1)
 
             pred_arms = torch.argmax(r_pred, dim=1)
@@ -103,11 +103,11 @@ def evaluate_oracle(oracle_model):
             # Log info
             progress_bar.update(batch_size)
 
-            progress_bar.set_postfix(performance=n_right_decisions.item() / n_samples * 100)
+            progress_bar.set_postfix(frac_incorrect_decisions=(n_samples - n_right_decisions.item()) / n_samples * 100)
 
-    oracle_model.train()
+    reward_model.train()
 
-    return {'performance': n_right_decisions.item() / n_samples * 100}
+    return {'frac_incorrect_decisions': (n_samples - n_right_decisions.item()) / n_samples * 100}
 
 
 
@@ -122,15 +122,15 @@ def train_default(args, train_loader, tbx):
         log.info('Building model...')
         model = util.get_model_class(args.model)(args)
 
-    # Load the oracle model
-    oracle_model = util.LinearOracle(hidden_size=args.hidden_size,
-                                     drop_prob=args.drop_prob)
-    oracle_model = torch.nn.DataParallel(oracle_model, args.gpu_ids)
+    # Load the reward model
+    reward_model = util.LinearRewardModel(hidden_size=args.hidden_size,
+                                          drop_prob=args.drop_prob)
+    reward_model = torch.nn.DataParallel(reward_model, args.gpu_ids)
 
-    oracle_model = util.load_oracle_model(oracle_model, args.oracle_load_path, args.gpu_ids, return_step=False)
-    oracle_model.eval()
+    reward_model = util.load_reward_model(reward_model, args.reward_load_path, args.gpu_ids, return_step=False)
+    reward_model.eval()
 
-    model.oracle_model = oracle_model
+    model.reward_model = reward_model
 
     # Train
     log.info('Training...')
@@ -160,7 +160,7 @@ def train_default(args, train_loader, tbx):
                     # Evaluate and save checkpoint
                     log.info(f'Evaluating at step {step}...')
 
-                    results = evaluate(model, oracle_model)
+                    results = evaluate(model, reward_model)
 
                     util.save_model(args, step, model, log)
 
@@ -174,17 +174,17 @@ def train_default(args, train_loader, tbx):
                         tbx.add_scalar(f'train/{k}', v, step)
 
 
-def train_oracle(args, train_loader, tbx):
+def train_reward(args, train_loader, tbx):
     # Get model
     log.info('Building model...')
 
-    model = util.LinearOracle(hidden_size=args.hidden_size,
-                              drop_prob=args.drop_prob)
+    model = util.LinearRewardModel(hidden_size=args.hidden_size,
+                                   drop_prob=args.drop_prob)
 
     model = torch.nn.DataParallel(model, args.gpu_ids)
     if args.load_path:
         log.info(f'Loading checkpoint from {args.load_path}...')
-        model, step = util.load_oracle_model(model, args.load_path, args.gpu_ids)
+        model, step = util.load_reward_model(model, args.load_path, args.gpu_ids)
     else:
         step = 0
     model = model.to(device)
@@ -226,20 +226,6 @@ def train_oracle(args, train_loader, tbx):
                 r1, r2, r3 = model(features)
                 r1, r2, r3 = r1.to(device), r2.to(device), r3.to(device)
 
-                # loss_r1 = F.mse_loss(r1, true_r[:, 0])
-                # loss_r2 = F.mse_loss(r2, true_r[:, 1])
-                # loss_r3 = F.mse_loss(r3, true_r[:, 2])
-                #
-                # loss_r1_val = loss_r1.item()
-                # loss_r2_val = loss_r2.item()
-                # loss_r3_val = loss_r3.item()
-                #
-                # # Backward
-                # loss_r1.backward()
-                # loss_r2.backward()
-                # loss_r3.backward()
-
-                # loss_r = F.mse_loss(r1, true_r[:, 0]) + F.mse_loss(r2, true_r[:, 1]) + F.mse_loss(r3, true_r[:, 2])
                 loss_r = F.mse_loss(torch.cat([r1, r2, r3], 1), true_r)
                 loss_r_val = loss_r.item()
 
@@ -253,20 +239,12 @@ def train_oracle(args, train_loader, tbx):
                 # Log info
                 step += batch_size
                 progress_bar.update(batch_size)
-                # progress_bar.set_postfix(epoch=epoch,
-                #                          mse_loss_r1=loss_r1_val,
-                #                          mse_loss_r2=loss_r2_val,
-                #                          mse_loss_r3=loss_r3_val)
-                #
-                # tbx.add_scalar('oracle/mse_loss_r1', loss_r1_val, step)
-                # tbx.add_scalar('oracle/mse_loss_r2', loss_r2_val, step)
-                # tbx.add_scalar('oracle/mse_loss_r3', loss_r3_val, step)
 
                 progress_bar.set_postfix(epoch=epoch,
                                          mse_loss=loss_r_val)
 
-                tbx.add_scalar('oracle/mse_loss', loss_r_val, step)
-                tbx.add_scalar('oracle/LR',
+                tbx.add_scalar('reward/mse_loss', loss_r_val, step)
+                tbx.add_scalar('reward/LR',
                                optimizer.param_groups[0]['lr'],
                                step)
 
@@ -274,20 +252,18 @@ def train_oracle(args, train_loader, tbx):
                 if steps_till_eval <= 0:
                     steps_till_eval = args.eval_steps
 
-                    results = evaluate_oracle(model)
-                    # saver.save(step, model, loss_r1_val + loss_r2_val + loss_r3_val, device)
+                    results = evaluate_reward(model)
                     saver.save(step, model, loss_r_val, device)
 
                     # Log to console
                     results_str = ', '.join(f'{k}: {v:05.2f}' for k, v in results.items())
-                    # loss_str = f'mse_loss_r1 - {loss_r1_val} mse_loss_r2 - {loss_r2_val} mse_loss_r3 - {loss_r3_val}'
                     loss_str = f'mse_loss - {loss_r_val}'
-                    log.info(f'Oracle {results_str} {loss_str}')
+                    log.info(f'reward {results_str} {loss_str}')
 
                     # Log to TensorBoard
                     log.info('Visualizing in TensorBoard...')
                     for k, v in results.items():
-                        tbx.add_scalar(f'oracle/{k}', v, step)
+                        tbx.add_scalar(f'reward/{k}', v, step)
 
 
 if __name__ == '__main__':
@@ -325,8 +301,8 @@ if __name__ == '__main__':
                               shuffle=args.data_shuffle,
                               num_workers=args.num_workers)
 
-    if args.model == 'oracle':
-        train_oracle(args, train_loader, tbx)
+    if args.model == 'reward':
+        train_reward(args, train_loader, tbx)
     else:
         train_default(args, train_loader, tbx)
 

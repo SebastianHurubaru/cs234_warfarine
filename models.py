@@ -8,13 +8,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class LinearOracle(nn.Module):
+class LinearRewardModel(nn.Module):
 
     """
     """
 
     def __init__(self, hidden_size, drop_prob=0.):
-        super(LinearOracle, self).__init__()
+        super(LinearRewardModel, self).__init__()
 
         self.out_size = 1
         self.drop_prob = drop_prob
@@ -201,12 +201,12 @@ class LinUCBModel(DefaultDoseModel):
 
             a_max = self.compute_arm_index(data[t].unsqueeze(0))
 
-            # get the oracle rewards
-            r1, r2, r3 = self.oracle_model(data[t].unsqueeze(0))
+            # get the reward rewards
+            r1, r2, r3 = self.reward_model(data[t].unsqueeze(0))
 
-            # get the oracle reward for the calculated arm
-            r_oracle = torch.cat([r1, r2, r3], 1)
-            r = r_oracle.gather(1, a_max).squeeze(-1)
+            # get the reward reward for the calculated arm
+            r_reward = torch.cat([r1, r2, r3], 1)
+            r = r_reward.gather(1, a_max).squeeze(-1)
 
             # update parameters
             x = data[t].unsqueeze(-1)
