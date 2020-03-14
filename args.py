@@ -68,10 +68,14 @@ def get_train_args():
                         default=0,
                         help='L2 weight decay.')
 
+    parser.add_argument('--use_ema',
+                        type=lambda s: s.lower().startswith('t'),
+                        default=True,
+                        help='Use exponential moving average of parameters.')
 
     parser.add_argument('--ema_decay',
                         type=float,
-                        default=0.999,
+                        default=0.99,
                         help='Decay rate for exponential moving average of parameters.')
 
     parser.add_argument('--metric_name',
@@ -87,7 +91,7 @@ def get_train_args():
 
     parser.add_argument('--max_checkpoints',
                         type=int,
-                        default=5,
+                        default=1,
                         help='Maximum number of checkpoints to keep on disk.')
 
     parser.add_argument('--max_grad_norm',

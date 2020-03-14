@@ -54,7 +54,7 @@ class LinearRewardModel(nn.Module):
         r2 = F.dropout(r2, self.drop_prob, self.training)
         r3 = F.dropout(r3, self.drop_prob, self.training)
 
-        return r1, r2, r3
+        return torch.cat([r1, r2, r3], -1)
 
 class DefaultDoseModel:
 

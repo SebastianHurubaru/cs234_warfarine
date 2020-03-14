@@ -28,7 +28,7 @@ def evaluate(model, reward_model):
     dataset = TensorDataset(Tensor(eval_dataset[:, :-3]), Tensor(eval_dataset[:, -3:]))
     eval_loader = DataLoader(dataset,
                              batch_size=args.batch_size,
-                             shuffle=args.data_shuffle,
+                             shuffle=False,
                              num_workers=args.num_workers)
 
     total_regret = 0.
@@ -41,10 +41,9 @@ def evaluate(model, reward_model):
             batch_size = features.size(0)
 
             # Forward
-            r1, r2, r3 = reward_model(features)
+            r = reward_model(features)
 
             # Compute regret
-            r = torch.cat([r1, r2, r3], 1)
             r_max, best_arms = torch.max(r, dim=1)
             pred_arms = model.compute_arm_index(features)
             r_pred = r.gather(1, pred_arms).squeeze(-1)
@@ -75,7 +74,7 @@ def evaluate_reward(reward_model):
     dataset = TensorDataset(Tensor(eval_dataset[:, :-3]), Tensor(eval_dataset[:, -3:]))
     eval_loader = DataLoader(dataset,
                              batch_size=args.batch_size,
-                             shuffle=args.data_shuffle,
+                             shuffle=False,
                              num_workers=args.num_workers)
     reward_model.eval()
 
@@ -84,17 +83,19 @@ def evaluate_reward(reward_model):
     with torch.no_grad(), \
          tqdm(total=len(eval_dataset)) as progress_bar:
         for features, true_r in eval_loader:
+
+            features = features.to(device)
+            true_r = true_r.to(device)
+
             # Setup for forward
             batch_size = features.size(0)
 
             # Forward
-            r1, r2, r3 = reward_model(features)
+            r_pred = reward_model(features)
 
             n_samples += batch_size
 
             # Compute fraction of incorrect decisions
-            r_pred = torch.cat([r1, r2, r3], 1)
-
             pred_arms = torch.argmax(r_pred, dim=1)
             true_arms = torch.argmax(true_r, dim=1)
 
@@ -207,8 +208,11 @@ def train_reward(args, train_loader, tbx):
                                          lr=args.lr,
                                          weight_decay=args.l2_wd)
 
-    if args.use_lr_scheduler == True:
+    if args.use_lr_scheduler:
         scheduler = sched.StepLR(optimizer, step_size=args.lr_step_size, gamma=args.lr_step_gamma)
+
+    if args.use_ema:
+        ema = util.EMA(model, args.ema_decay)
 
     # Train
     log.info('Training...')
@@ -221,15 +225,18 @@ def train_reward(args, train_loader, tbx):
              tqdm(total=len(train_loader.dataset)) as progress_bar:
             for features, true_r in train_loader:
 
+                features = features.to(device)
+                true_r = true_r.to(device)
+
                 # Setup for forward
                 batch_size = features.size()[0]
                 optimizer.zero_grad()
 
                 # Forward
-                r1, r2, r3 = model(features)
-                r1, r2, r3 = r1.to(device), r2.to(device), r3.to(device)
+                r = model(features)
+                r = r.to(device)
 
-                loss_r = F.mse_loss(torch.cat([r1, r2, r3], 1), true_r)
+                loss_r = F.mse_loss(r, true_r)
                 loss_r_val = loss_r.item()
 
                 # Backward
@@ -240,6 +247,9 @@ def train_reward(args, train_loader, tbx):
 
                 if args.use_lr_scheduler == True:
                     scheduler.step(step // batch_size)
+
+                if args.use_ema:
+                    ema(model, step // batch_size)
 
                 # Log info
                 step += batch_size
@@ -257,8 +267,12 @@ def train_reward(args, train_loader, tbx):
                 if steps_till_eval <= 0:
                     steps_till_eval = args.eval_steps
 
+                    if args.use_ema:
+                        ema.assign(model)
                     results = evaluate_reward(model)
                     saver.save(step, model, loss_r_val, device)
+                    if args.use_ema:
+                        ema.resume(model)
 
                     # Log to console
                     results_str = ', '.join(f'{k}: {v:05.2f}' for k, v in results.items())
