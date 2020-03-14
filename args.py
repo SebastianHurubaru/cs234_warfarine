@@ -50,7 +50,7 @@ def get_train_args():
 
     parser.add_argument('--lr',
                         type=float,
-                        default=0.5,
+                        default=0.002,
                         help='Learning rate.')
 
     parser.add_argument('--lr_step_size',
@@ -92,8 +92,20 @@ def get_train_args():
 
     parser.add_argument('--max_grad_norm',
                         type=float,
-                        default=5.0,
+                        default=10.0,
                         help='Maximum gradient norm for gradient clipping.')
+
+    parser.add_argument('--optimizer',
+                        type=str,
+                        default='Adamax',
+                        choices=('Adamax, Adadelta'),
+                        help='Name of dev metric to determine best checkpoint.')
+
+    parser.add_argument('--use_lr_scheduler',
+                        type=lambda s: s.lower().startswith('t'),
+                        default=False,
+                        help='Whether to use learn rate scheduler.')
+
 
     args = parser.parse_args()
     if args.model in ['fixed', 'clinical', 'pharmacogenetic', 'lin_ucb'] and not args.reward_load_path:
@@ -176,12 +188,12 @@ def add_train_test_args(parser):
 
     parser.add_argument('--hidden_size',
                         type=int,
-                        default=17,
+                        default=2704,
                         help='Number of features in the hidden layers.')
 
     parser.add_argument('--drop_prob',
                         type=float,
-                        default=0.3,
+                        default=0.4,
                         help='Probability of zeroing an activation in dropout layers.')
 
     parser.add_argument('--data_shuffle',

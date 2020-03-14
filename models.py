@@ -7,6 +7,25 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+column_mapping = {
+    'AGE_IN_DECADES': 10,
+    'HEIGHT_IN_CM': 11,
+    'WEIGHT_IN_KG': 12,
+    'VKORC1_A/G': 2602,
+    'VKORC1_A/A': 2601,
+    'VKORC1_NA': 2604,
+    'CYP2C9_*1/*2': 2578,
+    'CYP2C9_*1/*3': 2579,
+    'CYP2C9_*2/*2': 2582,
+    'CYP2C9_*2/*3': 2583,
+    'CYP2C9_*3/*3': 2584,
+    'CYP2C9_NA': 2585,
+    'RACE_ASIAN': 3,
+    'RACE_BLACK_OR_AFRICAN_AMERICAN': 4,
+    'RACE_NA': 5,
+    'ENZYME_INDUCER_STATUS': 2703,
+    'AMIODARONE_1': 2541
+}
 
 class LinearRewardModel(nn.Module):
 
@@ -104,7 +123,7 @@ class WarfarinClinicalDosingModel(DefaultDoseModel):
 
         dose_inputs = torch.cat([
             torch.ones((data.size(0), 1), dtype=torch.float, device=data.device),
-            data], 1)
+            data[:, list(column_mapping.values())]], 1)
 
         dose_params_tensor = torch.FloatTensor(self.dose_params).unsqueeze(-1)
         dose_params_tensor.to(data.device)
@@ -148,11 +167,9 @@ class WarfarinPharmacogeneticDosingModel(DefaultDoseModel):
         ]
 
     def compute_arm_index(self, data):
-
-
         dose_inputs = torch.cat([
             torch.ones((data.size(0), 1), dtype=torch.float, device=data.device),
-            data], 1)
+            data[:, list(column_mapping.values())]], 1)
 
         dose_params_tensor = torch.FloatTensor(self.dose_params).unsqueeze(-1)
         dose_params_tensor.to(data.device)

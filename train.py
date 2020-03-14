@@ -198,14 +198,17 @@ def train_reward(args, train_loader, tbx):
                                  log=log)
 
     # Get optimizer and scheduler
-    optimizer = torch.optim.Adadelta(model.parameters(),
-                                     lr=args.lr,
-                                     weight_decay=args.l2_wd)
+    if args.optimizer == 'Adadelta':
+        optimizer = torch.optim.Adadelta(model.parameters(),
+                                         lr=args.lr,
+                                         weight_decay=args.l2_wd)
+    elif args.optimizer == 'Adamax':
+        optimizer = torch.optim.Adamax(model.parameters(),
+                                         lr=args.lr,
+                                         weight_decay=args.l2_wd)
 
-
-    # scheduler = sched.LambdaLR(optimizer, lambda s: 1.)  # Constant LR
-
-    scheduler = sched.StepLR(optimizer, step_size=args.lr_step_size, gamma=args.lr_step_gamma)
+    if args.use_lr_scheduler == True:
+        scheduler = sched.StepLR(optimizer, step_size=args.lr_step_size, gamma=args.lr_step_gamma)
 
     # Train
     log.info('Training...')
@@ -234,7 +237,9 @@ def train_reward(args, train_loader, tbx):
 
                 nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
                 optimizer.step()
-                scheduler.step(step // batch_size)
+
+                if args.use_lr_scheduler == True:
+                    scheduler.step(step // batch_size)
 
                 # Log info
                 step += batch_size
