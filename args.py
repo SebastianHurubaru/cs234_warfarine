@@ -101,9 +101,9 @@ def get_train_args():
 
     parser.add_argument('--optimizer',
                         type=str,
-                        default='Adamax',
-                        choices=('Adamax, Adadelta'),
-                        help='Name of dev metric to determine best checkpoint.')
+                        default='SGD',
+                        choices=('Adamax, Adadelta, SGD'),
+                        help='Optimizer to be used.')
 
     parser.add_argument('--use_lr_scheduler',
                         type=lambda s: s.lower().startswith('t'),

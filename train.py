@@ -207,6 +207,9 @@ def train_reward(args, train_loader, tbx):
         optimizer = torch.optim.Adamax(model.parameters(),
                                          lr=args.lr,
                                          weight_decay=args.l2_wd)
+    elif args.optimizer == 'SGD':
+        optimizer = optim.SGD(model.parameters(), args.lr,
+                                 weight_decay=args.l2_wd)
 
     if args.use_lr_scheduler:
         scheduler = sched.StepLR(optimizer, step_size=args.lr_step_size, gamma=args.lr_step_gamma)
