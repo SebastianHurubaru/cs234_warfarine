@@ -101,7 +101,7 @@ def get_train_args():
 
     parser.add_argument('--optimizer',
                         type=str,
-                        default='SGD',
+                        default='Adamax',
                         choices=('Adamax, Adadelta, SGD'),
                         help='Optimizer to be used.')
 
@@ -197,7 +197,7 @@ def add_train_test_args(parser):
 
     parser.add_argument('--drop_prob',
                         type=float,
-                        default=0.4,
+                        default=0.1,
                         help='Probability of zeroing an activation in dropout layers.')
 
     parser.add_argument('--data_shuffle',

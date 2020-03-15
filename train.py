@@ -37,6 +37,10 @@ def evaluate(model, reward_model):
     with torch.no_grad(), \
          tqdm(total=len(eval_dataset)) as progress_bar:
         for features, true_r in eval_loader:
+
+            features = features.to(device)
+            true_r = true_r.to(device)
+
             # Setup for forward
             batch_size = features.size(0)
 
@@ -145,6 +149,9 @@ def train_default(args, train_loader, tbx):
         with torch.no_grad(), \
              tqdm(total=len(train_loader.dataset)) as progress_bar:
             for features, true_r in train_loader:
+
+                features = features.to(device)
+                true_r = true_r.to(device)
 
                 batch_size = features.size(0)
                 model.train(features)
