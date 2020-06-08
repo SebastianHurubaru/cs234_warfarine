@@ -54,7 +54,7 @@ class LinearRewardModel(nn.Module):
         r2 = F.dropout(r2, self.drop_prob, self.training)
         r3 = F.dropout(r3, self.drop_prob, self.training)
 
-        return r1, r2, r3
+        return torch.cat([r1, r2, r3], -1)
 
 class DefaultDoseModel:
 
@@ -124,15 +124,17 @@ class WarfarinClinicalDosingModel(DefaultDoseModel):
         dose_inputs = torch.cat([
             torch.ones((data.size(0), 1), dtype=torch.float, device=data.device),
             data[:, list(column_mapping.values())]], 1)
+        dose_inputs.to(data.device)
 
         dose_params_tensor = torch.FloatTensor(self.dose_params).unsqueeze(-1)
-        dose_params_tensor.to(data.device)
+        dose_params_tensor = dose_params_tensor.to(data.device)
 
-        dose = torch.matmul(dose_inputs, torch.FloatTensor(self.dose_params))
+        dose = torch.matmul(dose_inputs, dose_params_tensor)
 
         dose = dose ** 2
 
-        arm_indexes = torch.LongTensor(util.discretize(dose), device=data.device).unsqueeze(-1)
+        arm_indexes = torch.LongTensor(util.discretize(dose.cpu()))
+        arm_indexes = arm_indexes.to(data.device)
 
         return arm_indexes
 
@@ -170,15 +172,17 @@ class WarfarinPharmacogeneticDosingModel(DefaultDoseModel):
         dose_inputs = torch.cat([
             torch.ones((data.size(0), 1), dtype=torch.float, device=data.device),
             data[:, list(column_mapping.values())]], 1)
+        dose_inputs.to(data.device)
 
         dose_params_tensor = torch.FloatTensor(self.dose_params).unsqueeze(-1)
-        dose_params_tensor.to(data.device)
+        dose_params_tensor = dose_params_tensor.to(data.device)
 
-        dose = torch.matmul(dose_inputs, torch.FloatTensor(self.dose_params))
+        dose = torch.matmul(dose_inputs, dose_params_tensor)
 
         dose = dose ** 2
 
-        arm_indexes = torch.LongTensor(util.discretize(dose), device=data.device).unsqueeze(-1)
+        arm_indexes = torch.LongTensor(util.discretize(dose.cpu()))
+        arm_indexes = arm_indexes.to(data.device)
 
         return arm_indexes
 
@@ -213,16 +217,21 @@ class LinUCBModel(DefaultDoseModel):
 
     def train(self, data):
 
+        self.A = self.A.to(data.device)
+        self.b = self.b.to(data.device)
+        self.AI = self.AI.to(data.device)
+        self.theta = self.theta.to(data.device)
+
         # need to loop through the batch and make it iterative
         for t in range(data.size(0)):
 
             a_max = self.compute_arm_index(data[t].unsqueeze(0))
+            a_max = a_max.to(data.device)
 
             # get the reward rewards
-            r1, r2, r3 = self.reward_model(data[t].unsqueeze(0))
+            r_reward = self.reward_model(data[t].unsqueeze(0))
 
             # get the reward reward for the calculated arm
-            r_reward = torch.cat([r1, r2, r3], 1)
             r = r_reward.gather(1, a_max).squeeze(-1)
 
             # update parameters
@@ -233,6 +242,13 @@ class LinUCBModel(DefaultDoseModel):
             self.b[a_max] += r * x
             self.AI[a_max] = torch.inverse(self.A[a_max])
             self.theta[a_max] = torch.matmul(self.AI[a_max], self.b[a_max])
+
+            del r_reward
+            del r
+            del x
+            del x_t
+            del a_max
+
 
     def compute_arm_index(self, data):
 

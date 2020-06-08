@@ -68,10 +68,14 @@ def get_train_args():
                         default=0,
                         help='L2 weight decay.')
 
+    parser.add_argument('--use_ema',
+                        type=lambda s: s.lower().startswith('t'),
+                        default=True,
+                        help='Use exponential moving average of parameters.')
 
     parser.add_argument('--ema_decay',
                         type=float,
-                        default=0.999,
+                        default=0.99,
                         help='Decay rate for exponential moving average of parameters.')
 
     parser.add_argument('--metric_name',
@@ -87,7 +91,7 @@ def get_train_args():
 
     parser.add_argument('--max_checkpoints',
                         type=int,
-                        default=5,
+                        default=1,
                         help='Maximum number of checkpoints to keep on disk.')
 
     parser.add_argument('--max_grad_norm',
@@ -98,8 +102,8 @@ def get_train_args():
     parser.add_argument('--optimizer',
                         type=str,
                         default='Adamax',
-                        choices=('Adamax, Adadelta'),
-                        help='Name of dev metric to determine best checkpoint.')
+                        choices=('Adamax, Adadelta, SGD'),
+                        help='Optimizer to be used.')
 
     parser.add_argument('--use_lr_scheduler',
                         type=lambda s: s.lower().startswith('t'),
@@ -193,7 +197,7 @@ def add_train_test_args(parser):
 
     parser.add_argument('--drop_prob',
                         type=float,
-                        default=0.4,
+                        default=0.1,
                         help='Probability of zeroing an activation in dropout layers.')
 
     parser.add_argument('--data_shuffle',
